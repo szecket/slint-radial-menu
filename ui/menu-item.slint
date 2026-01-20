@@ -41,9 +41,11 @@ export component RadialMenuItem inherits Rectangle {
         stroke-width: 1px;
         
         // Draw arc segment
+        // Use the same gap angle at both radii for proportional appearance
+        property <angle> inner-gap-offset: config.item-gap-angle;
         MoveTo {
-            x: root.inner-radius / 1px * cos(root.start-angle);
-            y: root.inner-radius / 1px * sin(-root.start-angle);
+            x: root.inner-radius / 1px * cos(root.start-angle + inner-gap-offset);
+            y: root.inner-radius / 1px * sin(-(root.start-angle + inner-gap-offset));
         }
 
         LineTo {
@@ -56,19 +58,21 @@ export component RadialMenuItem inherits Rectangle {
             y: root.outer-radius / 1px * sin(-(root.start-angle + root.sweep-angle));
             radius-x: root.outer-radius / 1px;
             radius-y: root.outer-radius / 1px;
-            sweep: true;
+            sweep: false;
         }
 
         LineTo {
-            x: root.inner-radius / 1px * cos(root.start-angle + root.sweep-angle);
-            y: root.inner-radius / 1px * sin(-(root.start-angle + root.sweep-angle));
+            x: root.inner-radius / 1px * cos(root.start-angle + root.sweep-angle - inner-gap-offset);
+            y: root.inner-radius / 1px * sin(-(root.start-angle + root.sweep-angle - inner-gap-offset));
         }
 
         ArcTo {
-            x: root.inner-radius / 1px * cos(root.start-angle);
-            y: root.inner-radius / 1px * sin(-root.start-angle);
+            x: root.inner-radius / 1px * cos(root.start-angle + inner-gap-offset);
+            y: root.inner-radius / 1px * sin(-(root.start-angle + inner-gap-offset));
             radius-x: root.inner-radius / 1px;
             radius-y: root.inner-radius / 1px;
+            sweep: true;
+            large-arc: root.sweep-angle > 180deg;
         }
 
         Close { }

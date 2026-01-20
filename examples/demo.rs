@@ -24,12 +24,38 @@ slint::slint! {
         callback show-submenu-callback(int, length, length);
         callback check-has-children-callback(int) -> bool;
         
+        // Background with a gradient and pattern to simulate an interface
+        Rectangle {
+            width: 100%;
+            height: 100%;
+            background: @linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%);
+        }
+        
+        // Simulated UI elements
+        Rectangle {
+            x: 20px;
+            y: 100px;
+            width: 200px;
+            height: 400px;
+            background: #ffffff20;
+            border-radius: 8px;
+        }
+        
+        Rectangle {
+            x: parent.width - 220px;
+            y: 100px;
+            width: 200px;
+            height: 300px;
+            background: #ffffff15;
+            border-radius: 8px;
+        }
+        
         // Instructions
         Text {
             x: 20px;
             y: 20px;
             text: "Control+Click anywhere to open the radial menu";
-            color: #888888;
+            color: #ffffff;
             font-size: 14px;
         }
         
@@ -37,7 +63,7 @@ slint::slint! {
             x: 20px;
             y: 45px;
             text: "Drag to select items. Hold over an item for 1 second to open submenu. Release to select.";
-            color: #666666;
+            color: #ffffffcc;
             font-size: 12px;
         }
         
@@ -45,7 +71,7 @@ slint::slint! {
             x: 20px;
             y: 70px;
             text: "Press ESC to cancel.";
-            color: #666666;
+            color: #ffffffcc;
             font-size: 12px;
         }
         
@@ -55,7 +81,7 @@ slint::slint! {
             x: 20px;
             y: parent.height - 40px;
             text: "Last selected: " + selected-label;
-            color: #aaaaaa;
+            color: #ffffff;
             font-size: 14px;
         }
         
