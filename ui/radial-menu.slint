@@ -1,0 +1,425 @@
+// Copyright © 2026
+// SPDX-License-Identifier: MIT
+
+import { RadialMenuItem } from "menu-item.slint";
+import { MenuItem, RadialMenuConfig, RadialMenuDefaults } from "structs.slint";
+
+/// Main radial menu component.
+/// Displays a hierarchical radial menu triggered by Option+click.
+export component RadialMenu inherits Rectangle {
+    // Public API
+    in property <[MenuItem]> items: [];
+    in property <RadialMenuConfig> config: RadialMenuDefaults.config;
+    
+    // State
+    in-out property <bool> menu-visible: false;
+    in-out property <length> menu-x: 0px;
+    in-out property <length> menu-y: 0px;
+    in-out property <int> current-parent-id: -1;  // -1 = show root items
+    property <bool> parent-menu-hidden: false;  // Hide parent when submenu is shown
+    
+    // External mouse position (set by parent component)
+    in-out property <length> external-mouse-x: 0px;
+    in-out property <length> external-mouse-y: 0px;
+    
+    // Track mouse for direction detection
+    property <length> mouse-x-relative: 0px;  // Relative to menu center
+    property <length> mouse-y-relative: 0px;
+    property <length> drag-delta-x: 0px;  // Vector from menu center to current
+    property <length> drag-delta-y: 0px;
+    property <length> drag-distance: sqrt((drag-delta-x / 1px) * (drag-delta-x / 1px) + (drag-delta-y / 1px) * (drag-delta-y / 1px)) * 1px;
+    property <angle> mouse-angle: 0deg;
+    property <angle> normalized-mouse-angle: 0deg;  // 0-360 range starting from -90deg
+    property <int> highlighted-item-id: -1;
+    property <int> previous-highlighted-id: -1;  // Track for hover timer
+    property <bool> is-pressed: false;
+    property <duration> hover-start-time: 0ms;
+    property <duration> current-time: 0ms;
+    property <bool> submenu-triggered: false;  // Flag to prevent multiple triggers
+    property <length> submenu-capture-x: 0px;  // Captured position for submenu
+    property <length> submenu-capture-y: 0px;
+    property <duration> submenu-capture-time: 0ms;  // When we captured the position
+    property <bool> submenu-position-captured: false;
+    
+    // Animation
+    property <float> open-progress: menu-visible ? 1.0 : 0.0;
+    animate open-progress {
+        duration: config.open-duration-ms * 1ms;
+        easing: ease-out;
+    }
+    
+    // Continuous timer tick for hover detection
+    // This keeps updating even when mouse is still, so timer can trigger
+    property <int> timer-tick: 0;
+    
+    // Timer animation that runs continuously when pressed
+    animate timer-tick {
+        duration: 50ms;  // Check every 50ms
+        easing: linear;
+    }
+    
+    // Monitor press state to start/stop timer
+    changed is-pressed => {
+        if root.is-pressed {
+            root.timer-tick = 1;  // Start the timer
+        } else {
+            root.timer-tick = 0;  // Stop the timer
+        }
+    }
+    
+    // Trigger timer tick updates when hovering
+    changed timer-tick => {
+        if root.timer-tick > 0 {
+            debug("Timer tick:", root.timer-tick, "item:", root.highlighted-item-id);
+            // Check hover timer
+            if root.is-pressed && root.highlighted-item-id != -1 && !root.submenu-triggered {
+                root.check-hover-timer();
+            }
+            // Toggle to keep animation running (oscillate between 1 and 2)
+            if root.is-pressed {
+                root.timer-tick = root.timer-tick == 1 ? 2 : 1;
+            }
+        }
+    }
+    
+    // Callbacks
+    callback item-selected(int);  // Emits item id when clicked
+    callback menu-closed();
+    callback menu-opened(length, length);  // x, y position
+    callback handle-item-action(int);  // Handle selection or submenu opening
+    callback find-item-at-angle(angle) -> int;  // Returns item id at given angle, or -1
+    callback show-submenu(int, length, length);  // item-id, mouse-x, mouse-y
+    callback check-item-has-children(int) -> bool;  // Returns true if item has children
+    
+    // Helper: count items for current parent
+    pure function count-visible-items() -> int {
+        // Count items matching current parent
+        // Since we can't filter in Slint, we'll use a workaround
+        // This will be calculated properly in the for loop
+        items.length  // Actual count happens during rendering
+    }
+    
+    // Helper: calculate angle from center to mouse
+    pure function calculate-mouse-angle() -> angle {
+        // Calculate angle using atan2 approximation
+        // Slint doesn't have atan2, so we use atan(y/x) with quadrant adjustment
+        // This gives us the angle from the positive x-axis
+        // We convert to start from top (-90deg offset)
+        atan(mouse-y-relative / max(abs(mouse-x-relative), 1px))
+    }
+    
+    // Size based on outer radius - but 0 when not visible to avoid intercepting events
+    width: menu-visible ? config.outer-radius * 2 + 40px : 0px;
+    height: menu-visible ? config.outer-radius * 2 + 40px : 0px;
+    
+    // Position at menu location (off-screen when not visible)
+    x: menu-visible ? menu-x - (config.outer-radius + 20px) : -1000px;
+    y: menu-visible ? menu-y - (config.outer-radius + 20px) : -1000px;
+    
+    // Only show when visible
+    opacity: open-progress;
+    
+    // Background circle (subtle shadow/glow)
+    if menu-visible: Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: config.outer-radius * 2 + 8px;
+        height: config.outer-radius * 2 + 8px;
+        border-radius: self.width / 2;
+        background: #00000040;
+        
+        // Inner background
+        Rectangle {
+            x: 4px;
+            y: 4px;
+            width: parent.width - 8px;
+            height: parent.height - 8px;
+            border-radius: self.width / 2;
+            background: config.background-color;
+            border-color: config.border-color;
+            border-width: 1px;
+        }
+    }
+    
+    // Center dot
+    if menu-visible: Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: config.inner-radius * 2 - 8px;
+        height: config.inner-radius * 2 - 8px;
+        border-radius: self.width / 2;
+        background: config.background-color;
+        border-color: config.border-color;
+        border-width: 1px;
+    }
+    
+    // Menu items rendered as arc segments
+    for item[index] in items: RadialMenuItem {
+        // Only show items matching current parent
+        visible: item.parent-id == root.current-parent-id && root.menu-visible;
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        label: item.label;
+        enabled: item.enabled;
+        has-children: item.has-children;
+        config: root.config;
+        
+        // Use precomputed position from struct
+        property <int> position-in-parent: item.sibling-index;
+        property <int> total-siblings: item.sibling-count;
+        property <angle> angle-per-item: total-siblings > 0 ? 360deg / total-siblings : 360deg;
+        property <angle> gap: config.item-gap-angle;
+        
+        // Start from top (270deg in standard coords, -90 in our system)
+        // and distribute clockwise
+        start-angle: -90deg + position-in-parent * angle-per-item + gap / 2;
+        sweep-angle: angle-per-item - gap;
+        inner-radius: root.config.inner-radius;
+        outer-radius: root.config.outer-radius * root.open-progress;
+        
+        // Highlight if mouse angle points to this item
+        hovered: root.highlighted-item-id == item.id;
+        clicked => {
+            // No-op: we handle selection on release, not click
+        }
+    }
+    
+    // Touch/click handling: Press-hold-drag-release
+    // Only enabled when menu is visible to avoid intercepting clicks
+    if menu-visible: TouchArea {
+        width: 100%;
+        height: 100%;
+        pointer-event(event) => {
+            // Note: Mouse down/up handling is done by the parent component (Demo)
+            // This TouchArea only handles the cancel event (ESC key)
+            if event.kind == PointerEventKind.cancel {
+                root.close();
+            }
+        }
+        moved => {
+            if root.is-pressed {
+                // Calculate drag vector from menu center to current mouse position
+                root.drag-delta-x = self.mouse-x - parent.width / 2;
+                root.drag-delta-y = self.mouse-y - parent.height / 2;
+                
+                // Update which item is highlighted based on drag direction
+                root.update-highlighted-item();
+            }
+        }
+    }
+    
+    // Public functions
+    public pure function is-open() -> bool {
+        menu-visible
+    }
+    public function open(x: length, y: length) {
+        debug("RadialMenu.open called at", x, y);
+        menu-x = x;
+        menu-y = y;
+        current-parent-id = -1;
+        menu-visible = true;
+        is-pressed = true;
+        highlighted-item-id = -1;
+        previous-highlighted-id = -1;
+        submenu-triggered = false;
+        parent-menu-hidden = false;
+        drag-delta-x = 0px;
+        drag-delta-y = 0px;
+        external-mouse-x = x;
+        external-mouse-y = y;
+        menu-opened(x, y);
+    }
+    public function close() {
+        debug("RadialMenu.close called");
+        menu-visible = false;
+        current-parent-id = -1;
+        parent-menu-hidden = false;
+        is-pressed = false;
+        highlighted-item-id = -1;
+        previous-highlighted-id = -1;
+        submenu-triggered = false;
+        drag-delta-x = 0px;
+        drag-delta-y = 0px;
+        menu-closed();
+    }
+    
+    // Called by parent to update mouse position during drag
+    public function update-mouse(abs-x: length, abs-y: length) {
+        if !menu-visible || !is-pressed {
+            return;
+        }
+        external-mouse-x = abs-x;
+        external-mouse-y = abs-y;
+        
+        // Calculate drag vector from menu center to current mouse position
+        drag-delta-x = abs-x - menu-x;
+        drag-delta-y = abs-y - menu-y;
+        
+        // Update which item is highlighted based on drag direction
+        update-highlighted-item();
+    }
+    
+    // Called by parent when mouse is released
+    public function release() {
+        is-pressed = false;
+        
+        // Only select if we're outside the center (not cancelling)
+        // Re-check drag distance in case user moved back to center
+        if drag-distance >= config.inner-radius && highlighted-item-id != -1 {
+            debug("Releasing with selection:", highlighted-item-id);
+            handle-item-action(highlighted-item-id);
+        } else {
+            debug("Releasing in center - no selection");
+        }
+        // Close menu after selection
+        close();
+    }
+    public function go-back() {
+        // Navigate to parent menu
+        // TODO: Find parent's parent by iterating in Rust callback
+        // For now, just go to root
+        if current-parent-id != -1 {
+            current-parent-id = -1;
+        } else {
+            close();
+        }
+    }
+    function update-highlighted-item() {
+        // Check if drag distance is significant (> 5px from press point)
+        if root.drag-distance < 5px {
+            highlighted-item-id = -1;
+            previous-highlighted-id = -1;
+            return;
+        }
+        
+        // Calculate angle using proper atan2 logic
+        // Standard screen coords: 0° = right, 90° = down, 180° = left, 270° = up
+        // We need to offset by -90° to match menu layout (top = 0°)
+        
+        // First, get the basic atan value
+        if abs(drag-delta-x) < 0.1px {
+            // Nearly vertical - special case
+            if drag-delta-y < 0px {
+                root.mouse-angle = 270deg;  // Up
+            } else {
+                root.mouse-angle = 90deg;   // Down
+            }
+        } else if abs(drag-delta-y) < 0.1px {
+            // Nearly horizontal - special case
+            if drag-delta-x > 0px {
+                root.mouse-angle = 0deg;    // Right
+            } else {
+                root.mouse-angle = 180deg;  // Left
+            }
+        } else {
+            // General case - use atan with quadrant detection
+            // Determine quadrant and adjust angle
+            // Screen coords: y increases downward, x increases right
+            // We need to invert to match clockwise menu layout
+            if drag-delta-x > 0px && drag-delta-y < 0px {
+                // Right and up (toward top-right) -> 270° to 360°
+                root.mouse-angle = atan(abs(drag-delta-y) / abs(drag-delta-x));
+            } else if drag-delta-x > 0px && drag-delta-y > 0px {
+                // Right and down (toward bottom-right) -> 0° to 90°
+                root.mouse-angle = 360deg - atan(abs(drag-delta-y) / abs(drag-delta-x));
+            } else if drag-delta-x < 0px && drag-delta-y > 0px {
+                // Left and down (toward bottom-left) -> 90° to 180°
+                root.mouse-angle = 180deg + atan(abs(drag-delta-y) / abs(drag-delta-x));
+            } else {
+                // Left and up (toward top-left) -> 180° to 270°
+                root.mouse-angle = 180deg - atan(abs(drag-delta-y) / abs(drag-delta-x));
+            }
+        }
+        
+        // The angle is already correct - no offset needed
+        // Menu starts at -90° (top), and our calculation gives 0° = right, 90° = down, etc.
+        root.normalized-mouse-angle = root.mouse-angle;
+        
+        // Ask Rust to find the matching item
+        highlighted-item-id = root.find-item-at-angle(root.normalized-mouse-angle);
+        
+        // GESTURE COMMIT: If we've moved past the outer radius, immediately trigger submenu
+        // This allows "muscle memory" navigation without waiting for menus to appear
+        if root.drag-distance > config.outer-radius && root.highlighted-item-id != -1 && !root.submenu-triggered {
+            if root.check-item-has-children(root.highlighted-item-id) {
+                // Trigger submenu immediately
+                root.submenu-triggered = true;
+                
+                // Tell Rust to switch to submenu BEFORE resetting state
+                root.show-submenu(root.highlighted-item-id, root.external-mouse-x, root.external-mouse-y);
+                
+                // Calculate new menu center at current mouse position
+                root.menu-x = root.external-mouse-x;
+                root.menu-y = root.external-mouse-y;
+                
+                // Reset drag tracking for new menu
+                root.drag-delta-x = 0px;
+                root.drag-delta-y = 0px;
+                root.previous-highlighted-id = -1;
+                root.highlighted-item-id = -1;
+                root.submenu-triggered = false;  // Allow submenus in the new menu
+                return;
+            }
+        }
+        
+        // Check if highlighted item changed (for hover timer)
+        if root.highlighted-item-id != root.previous-highlighted-id {
+            root.previous-highlighted-id = root.highlighted-item-id;
+            root.hover-start-time = animation-tick();
+            root.submenu-triggered = false;
+            root.submenu-position-captured = false;
+            root.timer-tick = 0;  // Reset and start timer animation
+        }
+        
+        // Check hover timer (also called by continuous timer)
+        root.check-hover-timer();
+    }
+    
+    // Separate function for hover timer checking  
+    function check-hover-timer() {
+        if root.highlighted-item-id == -1 || root.submenu-triggered {
+            return;
+        }
+        
+        // Same item hovered - check timing for submenu
+        root.current-time = animation-tick();
+        
+        // Check if item has children
+        if root.check-item-has-children(root.highlighted-item-id) {
+            // Capture position 200ms before showing submenu
+            if !root.submenu-position-captured && (root.current-time - root.hover-start-time) >= (config.submenu-delay-ms - 200) * 1ms {
+                root.submenu-capture-x = root.external-mouse-x;
+                root.submenu-capture-y = root.external-mouse-y;
+                root.submenu-position-captured = true;
+                debug("Position captured at", root.submenu-capture-x, root.submenu-capture-y);
+            }
+            
+            // Show submenu after full delay
+            if (root.current-time - root.hover-start-time) >= config.submenu-delay-ms * 1ms {
+                // Trigger submenu at CAPTURED mouse position (from 200ms ago)
+                root.submenu-triggered = true;
+                debug("Hover timer: showing submenu at captured position", root.submenu-capture-x, root.submenu-capture-y);
+                
+                // Tell Rust to switch to submenu BEFORE resetting state
+                root.show-submenu(root.highlighted-item-id, root.submenu-capture-x, root.submenu-capture-y);
+                
+                // Calculate new menu center at captured position
+                root.menu-x = root.submenu-capture-x;
+                root.menu-y = root.submenu-capture-y;
+                
+                // Reset drag tracking for new menu
+                root.drag-delta-x = 0px;
+                root.drag-delta-y = 0px;
+                root.previous-highlighted-id = -1;
+                root.highlighted-item-id = -1;
+                root.submenu-triggered = false;  // Allow submenus in the new menu
+                root.submenu-position-captured = false;
+            }
+        }
+    }
+}
+
+// Re-export structs
+export { MenuItem, RadialMenuConfig, RadialMenuDefaults }

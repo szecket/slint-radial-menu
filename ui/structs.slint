@@ -1,0 +1,54 @@
+// Copyright © 2026
+// SPDX-License-Identifier: MIT
+
+/// Data structure for a menu item.
+/// Uses flat hierarchy with parent references for easy Rust interop.
+export struct MenuItem {
+    id: int,
+    parent-id: int,      // -1 for root items
+    label: string,
+    icon: string,        // Icon identifier or path
+    enabled: bool,
+    has-children: bool,  // Computed: true if any item has this as parent
+    sibling-index: int,  // Position among siblings (0-based)
+    sibling-count: int,  // Total siblings with same parent
+}
+
+/// Configuration for the radial menu appearance.
+export struct RadialMenuConfig {
+    // Geometry
+    inner-radius: length,
+    outer-radius: length,
+    item-gap-angle: angle,  // Gap between items in degrees
+    
+    // Colors (minimal professional palette)
+    background-color: color,
+    item-color: color,
+    item-hover-color: color,
+    item-active-color: color,
+    text-color: color,
+    text-hover-color: color,
+    border-color: color,
+    
+    // Animation
+    open-duration-ms: int,
+    submenu-delay-ms: int,  // Delay before showing submenu
+}
+
+/// Default configuration for a minimal professional look.
+export global RadialMenuDefaults {
+    out property <RadialMenuConfig> config: {
+        inner-radius: 40px,
+        outer-radius: 120px,
+        item-gap-angle: 2deg,
+        background-color: #1a1a1a,
+        item-color: #2d2d2d,
+        item-hover-color: #3d3d3d,
+        item-active-color: #4a9eff,
+        text-color: #cccccc,
+        text-hover-color: #ffffff,
+        border-color: #404040,
+        open-duration-ms: 150,
+        submenu-delay-ms: 1000,
+    };
+}

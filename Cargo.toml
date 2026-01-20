@@ -1,0 +1,20 @@
+[package]
+name = "slint-radial-menu"
+version = "0.1.0"
+edition = "2021"
+description = "A reusable radial menu library for Slint"
+license = "MIT"
+
+[lib]
+name = "slint_radial_menu"
+path = "src/lib.rs"
+
+[[example]]
+name = "demo"
+path = "examples/demo.rs"
+
+[dependencies]
+slint = "1.9"
+
+[build-dependencies]
+slint-build = "1.9"

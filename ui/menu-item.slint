@@ -1,0 +1,115 @@
+// Copyright © 2026
+// SPDX-License-Identifier: MIT
+
+import { RadialMenuConfig, RadialMenuDefaults } from "structs.slint";
+
+/// A single item in the radial menu, rendered as an arc segment.
+export component RadialMenuItem inherits Rectangle {
+    in property <string> label;
+    in property <angle> start-angle;
+    in property <angle> sweep-angle;
+    in property <length> inner-radius;
+    in property <length> outer-radius;
+    in property <bool> enabled: true;
+    in property <bool> has-children: false;
+    in property <RadialMenuConfig> config: RadialMenuDefaults.config;
+    in-out property <bool> hovered: false;
+    in-out property <bool> pressed: false;
+    callback clicked();
+    callback hover-changed(bool);
+    
+    // Calculate center position for this arc segment
+    property <angle> mid-angle: start-angle + sweep-angle / 2;
+    property <length> label-radius: (inner-radius + outer-radius) / 2;
+    property <length> label-x: label-radius * cos(mid-angle);
+    property <length> label-y: label-radius * sin(mid-angle);
+    
+    // Colors based on state
+    property <color> current-bg: pressed ? config.item-active-color : hovered ? config.item-hover-color : config.item-color;
+    property <color> current-text: hovered ? config.text-hover-color : config.text-color;
+    
+    // Arc segment using Path
+    Path {
+        width: 100%;
+        height: 100%;
+        viewbox-x: -parent.width / 2px;
+        viewbox-y: -parent.height / 2px;
+        viewbox-width: parent.width / 1px;
+        viewbox-height: parent.height / 1px;
+        fill: root.enabled ? root.current-bg : #1a1a1a80;
+        stroke: config.border-color;
+        stroke-width: 1px;
+        
+        // Draw arc segment
+        MoveTo {
+            x: root.inner-radius / 1px * cos(root.start-angle);
+            y: root.inner-radius / 1px * sin(-root.start-angle);
+        }
+
+        LineTo {
+            x: root.outer-radius / 1px * cos(root.start-angle);
+            y: root.outer-radius / 1px * sin(-root.start-angle);
+        }
+
+        ArcTo {
+            x: root.outer-radius / 1px * cos(root.start-angle + root.sweep-angle);
+            y: root.outer-radius / 1px * sin(-(root.start-angle + root.sweep-angle));
+            radius-x: root.outer-radius / 1px;
+            radius-y: root.outer-radius / 1px;
+            sweep: true;
+        }
+
+        LineTo {
+            x: root.inner-radius / 1px * cos(root.start-angle + root.sweep-angle);
+            y: root.inner-radius / 1px * sin(-(root.start-angle + root.sweep-angle));
+        }
+
+        ArcTo {
+            x: root.inner-radius / 1px * cos(root.start-angle);
+            y: root.inner-radius / 1px * sin(-root.start-angle);
+            radius-x: root.inner-radius / 1px;
+            radius-y: root.inner-radius / 1px;
+        }
+
+        Close { }
+    }
+    
+    // Label text
+    Text {
+        x: parent.width / 2 + root.label-x - self.width / 2;
+        y: parent.height / 2 - root.label-y - self.height / 2;
+        text: root.label;
+        color: root.enabled ? root.current-text : #666666;
+        font-size: 12px;
+        font-weight: 500;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    
+    // Submenu indicator (small arrow)
+    if has-children: Path {
+        x: parent.width / 2 + (root.outer-radius - 12px) * cos(root.mid-angle) - 4px;
+        y: parent.height / 2 - (root.outer-radius - 12px) * sin(root.mid-angle) - 4px;
+        width: 8px;
+        height: 8px;
+        viewbox-width: 8;
+        viewbox-height: 8;
+        fill: root.current-text;
+        MoveTo {
+            x: 2;
+            y: 1;
+        }
+
+        LineTo {
+            x: 6;
+            y: 4;
+        }
+
+        LineTo {
+            x: 2;
+            y: 7;
+        }
+
+        Close { }
+    }
+}
