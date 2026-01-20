@@ -41,6 +41,58 @@ export component RadialMenu inherits Rectangle {
     property <duration> submenu-capture-time: 0ms;  // When we captured the position
     property <bool> submenu-position-captured: false;
     
+    // Ghost text for selection confirmation (public so Demo can display it)
+    out property <string> ghost-text: "";
+    out property <float> ghost-opacity: 0.0;
+    out property <length> ghost-x: 0px;
+    out property <length> ghost-y: 0px;
+    out property <bool> ghost-active: false;
+    property <duration> ghost-start-time: 0ms;
+    animate ghost-opacity {
+        duration: 250ms;
+        easing: ease-out;
+    }
+    
+    // Trigger ghost fade when activated
+    changed ghost-active => {
+        if ghost-active {
+            ghost-opacity = 1.0;
+            ghost-start-time = animation-tick();
+            // Ensure timer is running for ghost fade
+            if root.timer-tick == 0 {
+                root.timer-tick = 1;
+            }
+        }
+    }
+    
+    // Continuous timer also checks for ghost fade
+    changed timer-tick => {
+        if root.timer-tick > 0 {
+            // Check hover timer
+            if root.is-pressed && root.highlighted-item-id != -1 && !root.submenu-triggered {
+                root.check-hover-timer();
+            }
+            
+            // Check ghost fade and manage lifecycle
+            if root.ghost-active {
+                if (animation-tick() - root.ghost-start-time) >= 600ms {
+                    root.ghost-opacity = 0.0;
+                }
+                if (animation-tick() - root.ghost-start-time) >= 900ms {
+                    root.ghost-active = false;
+                    // Don't stop timer immediately - let it finish this cycle
+                }
+            }
+            
+            // Toggle to keep animation running (oscillate between 1 and 2)
+            if root.is-pressed || root.ghost-active {
+                root.timer-tick = root.timer-tick == 1 ? 2 : 1;
+            } else {
+                root.timer-tick = 0;
+            }
+        }
+    }
+    
     // Animation
     property <float> open-progress: menu-visible ? 1.0 : 0.0;
     animate open-progress {
@@ -62,22 +114,8 @@ export component RadialMenu inherits Rectangle {
     changed is-pressed => {
         if root.is-pressed {
             root.timer-tick = 1;  // Start the timer
-        } else {
-            root.timer-tick = 0;  // Stop the timer
-        }
-    }
-    
-    // Trigger timer tick updates when hovering
-    changed timer-tick => {
-        if root.timer-tick > 0 {
-            // Check hover timer
-            if root.is-pressed && root.highlighted-item-id != -1 && !root.submenu-triggered {
-                root.check-hover-timer();
-            }
-            // Toggle to keep animation running (oscillate between 1 and 2)
-            if root.is-pressed {
-                root.timer-tick = root.timer-tick == 1 ? 2 : 1;
-            }
+        } else if !root.ghost-active {
+            root.timer-tick = 0;  // Stop the timer only if no ghost
         }
     }
     
@@ -89,6 +127,7 @@ export component RadialMenu inherits Rectangle {
     callback find-item-at-angle(angle) -> int;  // Returns item id at given angle, or -1
     callback show-submenu(int, length, length);  // item-id, mouse-x, mouse-y
     callback check-item-has-children(int) -> bool;  // Returns true if item has children
+    callback get-item-text(int) -> string;  // Returns item text for ghost display
     
     // Helper: count items for current parent
     pure function count-visible-items() -> int {
@@ -228,6 +267,10 @@ export component RadialMenu inherits Rectangle {
         drag-delta-y = 0px;
         external-mouse-x = x;
         external-mouse-y = y;
+        
+        // Clear any existing ghost text
+        ghost-active = false;
+        ghost-opacity = 0.0;
         menu-opened(x, y);
     }
     public function close() {
@@ -268,9 +311,25 @@ export component RadialMenu inherits Rectangle {
         // Re-check drag distance in case user moved back to center
         if drag-distance >= config.inner-radius && highlighted-item-id != -1 {
             debug("Releasing with selection:", highlighted-item-id);
+            
+            // Show ghost text at current menu position
+            root.ghost-text = root.get-item-text(highlighted-item-id);
+            root.ghost-x = root.menu-x;
+            root.ghost-y = root.menu-y;
+            root.ghost-opacity = 1.0;
+            root.ghost-active = true;
+            root.ghost-start-time = animation-tick();
             handle-item-action(highlighted-item-id);
         } else {
             debug("Releasing in center - no selection");
+            // Still show ghost even when canceling (with empty or last text)
+            if root.ghost-text != "" {
+                root.ghost-x = root.menu-x;
+                root.ghost-y = root.menu-y;
+                root.ghost-opacity = 1.0;
+                root.ghost-active = true;
+                root.ghost-start-time = animation-tick();
+            }
         }
         // Close menu after selection
         close();

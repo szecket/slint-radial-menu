@@ -23,6 +23,7 @@ slint::slint! {
         callback find-item-at-angle-callback(angle) -> int;
         callback show-submenu-callback(int, length, length);
         callback check-has-children-callback(int) -> bool;
+        callback get-item-text-callback(int) -> string;
         
         // Background with a gradient and pattern to simulate an interface
         Rectangle {
@@ -146,6 +147,21 @@ slint::slint! {
             check-item-has-children(item-id) => {
                 root.check-has-children-callback(item-id)
             }
+            
+            get-item-text(item-id) => {
+                root.get-item-text-callback(item-id)
+            }
+        }
+        
+        // Ghost text overlay - shows after selection
+        if menu.ghost-active: Text {
+            x: menu.ghost-x - self.width / 2;
+            y: menu.ghost-y - self.height / 2;
+            text: menu.ghost-text;
+            font-size: 18px;
+            font-weight: 600;
+            color: #ffffff;
+            opacity: menu.ghost-opacity;
         }
         
         // Keyboard handling for ESC
@@ -308,6 +324,16 @@ fn main() {
     let menu_items_for_check = menu_items.clone();
     demo.on_check_has_children_callback(move |item_id| {
         menu_items_for_check.iter().any(|i| i.parent_id == item_id)
+    });
+    
+    // Get item text for ghost display
+    let menu_items_for_text = menu_items.clone();
+    demo.on_get_item_text_callback(move |item_id| {
+        menu_items_for_text
+            .iter()
+            .find(|i| i.id == item_id)
+            .map(|i| i.label.clone().into())
+            .unwrap_or_default()
     });
     
     // Show submenu at mouse position
