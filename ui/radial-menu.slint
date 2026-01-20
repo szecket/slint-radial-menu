@@ -70,7 +70,6 @@ export component RadialMenu inherits Rectangle {
     // Trigger timer tick updates when hovering
     changed timer-tick => {
         if root.timer-tick > 0 {
-            debug("Timer tick:", root.timer-tick, "item:", root.highlighted-item-id);
             // Check hover timer
             if root.is-pressed && root.highlighted-item-id != -1 && !root.submenu-triggered {
                 root.check-hover-timer();
@@ -370,7 +369,7 @@ export component RadialMenu inherits Rectangle {
             root.hover-start-time = animation-tick();
             root.submenu-triggered = false;
             root.submenu-position-captured = false;
-            root.timer-tick = 0;  // Reset and start timer animation
+            // Timer is already running from is-pressed, no need to restart
         }
         
         // Check hover timer (also called by continuous timer)
@@ -393,14 +392,12 @@ export component RadialMenu inherits Rectangle {
                 root.submenu-capture-x = root.external-mouse-x;
                 root.submenu-capture-y = root.external-mouse-y;
                 root.submenu-position-captured = true;
-                debug("Position captured at", root.submenu-capture-x, root.submenu-capture-y);
             }
             
             // Show submenu after full delay
             if (root.current-time - root.hover-start-time) >= config.submenu-delay-ms * 1ms {
                 // Trigger submenu at CAPTURED mouse position (from 200ms ago)
                 root.submenu-triggered = true;
-                debug("Hover timer: showing submenu at captured position", root.submenu-capture-x, root.submenu-capture-y);
                 
                 // Tell Rust to switch to submenu BEFORE resetting state
                 root.show-submenu(root.highlighted-item-id, root.submenu-capture-x, root.submenu-capture-y);
