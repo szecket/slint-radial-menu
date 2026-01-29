@@ -89,31 +89,43 @@ export component RadialMenuItem inherits Rectangle {
         horizontal-alignment: center;
         vertical-alignment: center;
     }
-    
-    // Submenu indicator (small arrow)
-    if has-children: Path {
+
+    if has-children:
+        Image {
         x: parent.width / 2 + (root.outer-radius - 12px) * cos(root.mid-angle) - 4px;
         y: parent.height / 2 - (root.outer-radius - 12px) * sin(root.mid-angle) - 4px;
-        width: 8px;
-        height: 8px;
-        viewbox-width: 8;
-        viewbox-height: 8;
-        fill: root.current-text;
-        MoveTo {
-            x: 2;
-            y: 1;
-        }
-
-        LineTo {
-            x: 6;
-            y: 4;
-        }
-
-        LineTo {
-            x: 2;
-            y: 7;
-        }
-
-        Close { }
+        width: 12px;
+        source: @image-url("img/folder.svg");
+        colorize: white;
     }
+
+    // // Submenu indicator (small arrow)
+    // if has-children: Path {
+    //     x: parent.width / 2 + (root.outer-radius - 12px) * cos(root.mid-angle) - 4px;
+    //     y: parent.height / 2 - (root.outer-radius - 12px) * sin(root.mid-angle) - 4px;
+    //     width: 8px;
+    //     height: 8px;
+    //     Image {
+    //         source: @image-url("img/folder.svg");
+    //     }
+    //     viewbox-width: 8;
+    //     viewbox-height: 8;
+    //     fill: root.current-text;
+    //     MoveTo {
+    //         x: 2;
+    //         y: 1;
+    //     }
+
+    //     LineTo {
+    //         x: 6;
+    //         y: 4;
+    //     }
+
+    //     LineTo {
+    //         x: 2;
+    //         y: 7;
+    //     }
+
+    //     Close { }
+    // }
 }

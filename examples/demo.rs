@@ -24,6 +24,7 @@ slint::slint! {
         callback show-submenu-callback(int, length, length);
         callback check-has-children-callback(int) -> bool;
         callback get-item-text-callback(int) -> string;
+        callback get-item-parent-id-callback(int) -> int;
         
         // Background with a gradient and pattern to simulate an interface
         Rectangle {
@@ -150,6 +151,10 @@ slint::slint! {
             
             get-item-text(item-id) => {
                 root.get-item-text-callback(item-id)
+            }
+            
+            get-item-parent-id(item-id) => {
+                root.get-item-parent-id-callback(item-id)
             }
         }
         
@@ -334,6 +339,16 @@ fn main() {
             .find(|i| i.id == item_id)
             .map(|i| i.label.clone().into())
             .unwrap_or_default()
+    });
+
+    // Get item parent-id
+    let menu_items_for_parent = menu_items.clone();
+    demo.on_get_item_parent_id_callback(move |item_id| {
+        menu_items_for_parent
+            .iter()
+            .find(|i| i.id == item_id)
+            .map(|i| i.parent_id)
+            .unwrap_or(-1)
     });
     
     // Show submenu at mouse position

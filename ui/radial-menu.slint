@@ -36,6 +36,10 @@ export component RadialMenu inherits Rectangle {
     property <duration> hover-start-time: 0ms;
     property <duration> current-time: 0ms;
     property <bool> submenu-triggered: false;  // Flag to prevent multiple triggers
+    property <bool> moved-outside-center: false;  // Track if user moved outside center in submenu
+    property <duration> center-hover-start-time: 0ms;  // Track hovering in center for go-back
+    property <bool> center-hover-triggered: false;  // Prevent multiple go-back triggers
+    property <string> parent-item-text: "";  // Text of parent menu item to display in center
     property <length> submenu-capture-x: 0px;  // Captured position for submenu
     property <length> submenu-capture-y: 0px;
     property <duration> submenu-capture-time: 0ms;  // When we captured the position
@@ -68,6 +72,34 @@ export component RadialMenu inherits Rectangle {
     // Continuous timer also checks for ghost fade
     changed timer-tick => {
         if root.timer-tick > 0 {
+            // Track if user moved outside center in submenu
+            if root.is-pressed && root.current-parent-id != -1 && root.drag-distance >= config.inner-radius {
+                root.moved-outside-center = true;
+                root.center-hover-triggered = false;  // Reset when leaving center
+            }
+            
+            // Check if hovering in center of submenu to go back (only after moving out first)
+            if root.is-pressed && root.current-parent-id != -1 && root.drag-distance < config.inner-radius && root.moved-outside-center {
+                // Start timing if just entered center
+                if root.center-hover-start-time == 0ms {
+                    root.center-hover-start-time = animation-tick();
+                }
+                
+                // Only go back after same delay as submenu hover
+                if !root.center-hover-triggered && (animation-tick() - root.center-hover-start-time) >= config.submenu-delay-ms * 1ms {
+                    root.center-hover-triggered = true;
+                    root.go-back();
+                    root.drag-delta-x = 0px;
+                    root.drag-delta-y = 0px;
+                    root.highlighted-item-id = -1;
+                    root.previous-highlighted-id = -1;
+                    root.moved-outside-center = false;  // Reset for next submenu
+                }
+            } else {
+                // Reset center hover timer when not in center
+                root.center-hover-start-time = 0ms;
+            }
+            
             // Check hover timer
             if root.is-pressed && root.highlighted-item-id != -1 && !root.submenu-triggered {
                 root.check-hover-timer();
@@ -98,7 +130,11 @@ export component RadialMenu inherits Rectangle {
     property <float> open-progress: 0.0;
     property <int> animation-tick-trigger: 0;
     
-    // Trigger animation on property change
+    // Submenu transition animation
+    property <float> submenu-progress: 1.0;
+    property <int> last-parent-id: -1;
+    
+    // Trigger main menu animation on property change
     changed animation-tick-trigger => {
         if animation-tick-trigger > 0 {
             is-opening = true;
@@ -107,9 +143,35 @@ export component RadialMenu inherits Rectangle {
             root.open-progress = 1.0;
         }
     }
+    
+    // Trigger submenu transition when parent changes
+    changed current-parent-id => {
+        if last-parent-id != current-parent-id && menu-visible {
+            submenu-progress = 0.0;
+            submenu-progress = 1.0;
+            last-parent-id = current-parent-id;
+        }
+        // Update parent item text for center display
+        // Show the parent of the current level (grandparent)
+        if current-parent-id != -1 {
+            // Get the parent-id of the current parent item
+            if get-item-parent-id(current-parent-id) == -1 {
+                // Parent is root, show "home"
+                root.parent-item-text = "home";
+            } else {
+                root.parent-item-text = get-item-text(get-item-parent-id(current-parent-id));
+            }
+        } else {
+            parent-item-text = "";
+        }
+    }
     animate open-progress {
         duration: is-opening ? config.open-duration-ms * 1ms : 0ms;
         easing: ease-out;
+    }
+    animate submenu-progress {
+        duration: 200ms;
+        easing: ease-in-out;
     }
     
     // Continuous timer tick for hover detection
@@ -140,6 +202,7 @@ export component RadialMenu inherits Rectangle {
     callback show-submenu(int, length, length);  // item-id, mouse-x, mouse-y
     callback check-item-has-children(int) -> bool;  // Returns true if item has children
     callback get-item-text(int) -> string;  // Returns item text for ghost display
+    callback get-item-parent-id(int) -> int;  // Returns parent-id of an item
     
     // Helper: count items for current parent
     pure function count-visible-items() -> int {
@@ -201,6 +264,18 @@ export component RadialMenu inherits Rectangle {
         background: config.background-color;
         border-color: config.border-color;
         border-width: 1px;
+        
+        // Show parent item name when in submenu
+        if root.current-parent-id != -1: Text {
+            width: 100%;
+            height: 100%;
+            text: root.parent-item-text;
+            color: white;
+            font-size: 11px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            overflow: elide;
+        }
     }
     
     // Menu items rendered as arc segments
@@ -227,7 +302,7 @@ export component RadialMenu inherits Rectangle {
         start-angle: -90deg + position-in-parent * angle-per-item + gap / 2;
         sweep-angle: angle-per-item - gap;
         inner-radius: root.config.inner-radius;
-        outer-radius: root.config.outer-radius * root.open-progress;
+        outer-radius: root.config.outer-radius * root.open-progress * root.submenu-progress;
         
         // Highlight if mouse angle points to this item
         hovered: root.highlighted-item-id == item.id;
@@ -287,6 +362,8 @@ export component RadialMenu inherits Rectangle {
         // Reset to 0, then trigger animation on next tick
         root.open-progress = 0.0;
         is-opening = false;
+        submenu-progress = 1.0;
+        last-parent-id = -1;
         animation-tick-trigger += 1;
         menu-opened(x, y);
     }
@@ -493,6 +570,9 @@ export component RadialMenu inherits Rectangle {
                 root.highlighted-item-id = -1;
                 root.submenu-triggered = false;  // Allow submenus in the new menu
                 root.submenu-position-captured = false;
+                root.moved-outside-center = false;  // Reset for new submenu
+                root.center-hover-start-time = 0ms;
+                root.center-hover-triggered = false;
             }
         }
     }
