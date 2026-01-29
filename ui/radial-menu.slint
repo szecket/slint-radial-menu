@@ -93,10 +93,22 @@ export component RadialMenu inherits Rectangle {
         }
     }
     
-    // Animation
-    property <float> open-progress: menu-visible ? 1.0 : 0.0;
+    // Animation - only when opening
+    property <bool> is-opening: false;
+    property <float> open-progress: 0.0;
+    property <int> animation-tick-trigger: 0;
+    
+    // Trigger animation on property change
+    changed animation-tick-trigger => {
+        if animation-tick-trigger > 0 {
+            is-opening = true;
+            // Go through a unique intermediate value each time to force re-trigger
+            root.open-progress = 0.001 * animation-tick-trigger;
+            root.open-progress = 1.0;
+        }
+    }
     animate open-progress {
-        duration: config.open-duration-ms * 1ms;
+        duration: is-opening ? config.open-duration-ms * 1ms : 0ms;
         easing: ease-out;
     }
     
@@ -271,10 +283,19 @@ export component RadialMenu inherits Rectangle {
         // Clear any existing ghost text
         ghost-active = false;
         ghost-opacity = 0.0;
+        
+        // Reset to 0, then trigger animation on next tick
+        root.open-progress = 0.0;
+        is-opening = false;
+        animation-tick-trigger += 1;
         menu-opened(x, y);
     }
     public function close() {
         debug("RadialMenu.close called");
+        
+        // Disable animation and instantly reset
+        is-opening = false;
+        root.open-progress = 0.0;
         menu-visible = false;
         current-parent-id = -1;
         parent-menu-hidden = false;
