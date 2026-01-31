@@ -33,6 +33,8 @@ export component RadialMenu inherits Rectangle {
     property <int> highlighted-item-id: -1;
     property <int> previous-highlighted-id: -1;  // Track for hover timer
     property <bool> is-pressed: false;
+    property <bool> hover-mode: false;  // True if menu is in hover-and-click mode (vs drag mode)
+    property <bool> has-dragged: false;  // Track if user has dragged significantly
     property <duration> hover-start-time: 0ms;
     property <duration> current-time: 0ms;
     property <bool> submenu-triggered: false;  // Flag to prevent multiple triggers
@@ -100,8 +102,8 @@ export component RadialMenu inherits Rectangle {
                 root.center-hover-start-time = 0ms;
             }
             
-            // Check hover timer
-            if root.is-pressed && root.highlighted-item-id != -1 && !root.submenu-triggered {
+            // Check hover timer (only in drag mode, not hover mode)
+            if !root.hover-mode && root.is-pressed && root.highlighted-item-id != -1 && !root.submenu-triggered {
                 root.check-hover-timer();
             }
             
@@ -240,7 +242,7 @@ export component RadialMenu inherits Rectangle {
         height: config.outer-radius * 2 + 8px;
         border-radius: self.width / 2;
         background: #00000040;
-        
+        opacity: 0.2;
         // Inner background
         Rectangle {
             x: 4px;
@@ -322,19 +324,52 @@ export component RadialMenu inherits Rectangle {
         width: 100%;
         height: 100%;
         pointer-event(event) => {
-            // Note: Mouse down/up handling is done by the parent component (Demo)
-            // This TouchArea only handles the cancel event (ESC key)
+            // Handle cancel event (ESC key)
             if event.kind == PointerEventKind.cancel {
                 root.close();
+            } else if event.kind == PointerEventKind.down && root.hover-mode {
+                // In hover mode, clicking selects the hovered item
+                if root.highlighted-item-id != -1 {
+                    // Check if item has children - if so, open submenu instead of selecting
+                    if root.check-item-has-children(root.highlighted-item-id) {
+                        // Open submenu at current menu position
+                        root.show-submenu(root.highlighted-item-id, root.menu-x, root.menu-y);
+                        root.highlighted-item-id = -1;
+                    } else {
+                        // Leaf item - select it
+                        root.ghost-text = root.get-item-text(root.highlighted-item-id);
+                        root.ghost-x = root.menu-x;
+                        root.ghost-y = root.menu-y;
+                        root.ghost-opacity = 1.0;
+                        root.ghost-active = true;
+                        root.ghost-start-time = animation-tick();
+                        root.handle-item-action(root.highlighted-item-id);
+                        root.close();
+                    }
+                } else if root.drag-distance < config.inner-radius && root.current-parent-id != -1 {
+                    // Clicked in center while in submenu - go back
+                    root.go-back();
+                } else {
+                    // Clicked in center at root or outside - close
+                    root.close();
+                }
+            } else if event.kind == PointerEventKind.move && root.hover-mode {
+                // Track mouse position for hover highlighting
+                root.drag-delta-x = self.mouse-x - parent.width / 2;
+                root.drag-delta-y = self.mouse-y - parent.height / 2;
+                root.update-highlighted-item();
             }
         }
         moved => {
             if root.is-pressed {
-                // Calculate drag vector from menu center to current mouse position
+                // Track if user has dragged significantly (more than 5px)
+                if root.drag-distance > 5px {
+                    root.has-dragged = true;
+                }
+            } else if root.hover-mode {
+                // In hover mode, update position for highlighting
                 root.drag-delta-x = self.mouse-x - parent.width / 2;
                 root.drag-delta-y = self.mouse-y - parent.height / 2;
-                
-                // Update which item is highlighted based on drag direction
                 root.update-highlighted-item();
             }
         }
@@ -344,6 +379,9 @@ export component RadialMenu inherits Rectangle {
     public pure function is-open() -> bool {
         menu-visible
     }
+    public pure function is-in-hover-mode() -> bool {
+        hover-mode
+    }
     public function open(x: length, y: length) {
         debug("RadialMenu.open called at", x, y);
         menu-x = x;
@@ -351,6 +389,8 @@ export component RadialMenu inherits Rectangle {
         current-parent-id = -1;
         menu-visible = true;
         is-pressed = true;
+        hover-mode = false;
+        has-dragged = false;
         highlighted-item-id = -1;
         previous-highlighted-id = -1;
         submenu-triggered = false;
@@ -373,6 +413,9 @@ export component RadialMenu inherits Rectangle {
         menu-opened(x, y);
     }
     public function close() {
+        if !menu-visible {
+            return;  // Already closed
+        }
         debug("RadialMenu.close called");
         
         // Disable animation and instantly reset
@@ -382,6 +425,8 @@ export component RadialMenu inherits Rectangle {
         current-parent-id = -1;
         parent-menu-hidden = false;
         is-pressed = false;
+        hover-mode = false;
+        has-dragged = false;
         highlighted-item-id = -1;
         previous-highlighted-id = -1;
         submenu-triggered = false;
@@ -390,11 +435,17 @@ export component RadialMenu inherits Rectangle {
         menu-closed();
     }
     
-    // Called by parent to update mouse position during drag
+    // Called by parent to update mouse position during drag or hover
     public function update-mouse(abs-x: length, abs-y: length) {
-        if !menu-visible || !is-pressed {
+        if !menu-visible {
             return;
         }
+        
+        // Skip if in drag mode but not pressed
+        if !hover-mode && !is-pressed {
+            return;
+        }
+        debug("update-mouse called, hover-mode:", hover-mode, "is-pressed:", is-pressed);
         external-mouse-x = abs-x;
         external-mouse-y = abs-y;
         
@@ -402,13 +453,28 @@ export component RadialMenu inherits Rectangle {
         drag-delta-x = abs-x - menu-x;
         drag-delta-y = abs-y - menu-y;
         
+        // Track if user has dragged significantly (more than 5px)
+        if is-pressed && drag-distance > 5px {
+            has-dragged = true;
+        }
+        debug("drag-distance:", drag-distance, "inner-radius:", config.inner-radius);
+        
         // Update which item is highlighted based on drag direction
         update-highlighted-item();
+        debug("highlighted-item-id:", highlighted-item-id);
     }
     
     // Called by parent when mouse is released
     public function release() {
+        debug("release() called - has-dragged:", has-dragged, "highlighted-item-id:", highlighted-item-id, "drag-distance:", drag-distance);
         is-pressed = false;
+        
+        // If user didn't drag, switch to hover mode instead of closing
+        if !root.has-dragged {
+            debug("No drag detected - switching to hover mode");
+            root.hover-mode = true;
+            return;
+        }
         
         // Only select if we're outside the center (not cancelling)
         // Re-check drag distance in case user moved back to center
@@ -448,8 +514,16 @@ export component RadialMenu inherits Rectangle {
         }
     }
     function update-highlighted-item() {
-        // Check if drag distance is significant (> 5px from press point)
-        if root.drag-distance < 5px {
+        // In drag mode, check if drag distance is significant (> 5px from press point)
+        // In hover mode, always highlight based on angle
+        if !root.hover-mode && root.drag-distance < 5px {
+            highlighted-item-id = -1;
+            previous-highlighted-id = -1;
+            return;
+        }
+        
+        // If mouse is in the center circle, clear highlight (both modes)
+        if root.drag-distance < config.inner-radius {
             highlighted-item-id = -1;
             previous-highlighted-id = -1;
             return;
@@ -501,9 +575,10 @@ export component RadialMenu inherits Rectangle {
         // Ask Rust to find the matching item
         highlighted-item-id = root.find-item-at-angle(root.normalized-mouse-angle);
         
-        // GESTURE COMMIT: If we've moved past the outer radius, immediately trigger submenu
+        // GESTURE COMMIT: Only in drag mode (not hover mode)
+        // If we've moved past the outer radius, immediately trigger submenu
         // This allows "muscle memory" navigation without waiting for menus to appear
-        if root.drag-distance > config.outer-radius && root.highlighted-item-id != -1 && !root.submenu-triggered {
+        if !root.hover-mode && root.drag-distance > config.outer-radius && root.highlighted-item-id != -1 && !root.submenu-triggered {
             if root.check-item-has-children(root.highlighted-item-id) {
                 // Trigger submenu immediately
                 root.submenu-triggered = true;

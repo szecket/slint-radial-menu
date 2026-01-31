@@ -94,6 +94,7 @@ slint::slint! {
             TouchArea {
                 width: 100%;
                 height: 100%;
+                mouse-cursor: MouseCursor.default;
                 
                 pointer-event(event) => {
                     if event.kind == PointerEventKind.down {
@@ -104,9 +105,14 @@ slint::slint! {
                             debug("Click without modifier");
                         }
                     } else if event.kind == PointerEventKind.up {
-                        if menu.is-open() {
+                        if menu.is-open() && !menu.is-in-hover-mode() {
                             debug("Mouse released, closing menu");
                             menu.release();
+                        }
+                    } else if event.kind == PointerEventKind.move {
+                        // Track mouse movement for hover mode
+                        if menu.is-open() {
+                            menu.update-mouse(self.mouse-x, self.mouse-y);
                         }
                     }
                 }
@@ -195,9 +201,9 @@ fn main() {
                 .child("Document 3")
             .end_submenu()
         .item("Edit")
-            .child("Undo")
             .child("Redo")
             .child("Cut")
+            .child("Undo")
             .child("Copy")
             .child("Paste")
         .item("View")
@@ -260,26 +266,35 @@ fn main() {
         // Normalize to 0-360 range
         let angle_norm = ((angle % 360.0) + 360.0) % 360.0;
         
+        // Fixed angular positions (cardinal-first)
+        // Position 0: East (0°), Position 1: South (-90° = 270°), 
+        // Position 2: West (180°), Position 3: North (90°)
+        // Position 4: Northeast (-45° = 315°), Position 5: Southeast (-135° = 225°),
+        // Position 6: Southwest (135°), Position 7: Northwest (45°)
+        const FIXED_ANGLES: [f32; 8] = [0.0, -90.0, 180.0, 90.0, -45.0, -135.0, 135.0, 45.0];
+        
         // Find matching item
         for item_data in menu_items_clone.iter() {
             if item_data.parent_id != current_parent {
                 continue;
             }
             
-            // Calculate this item's angle range
+            // Calculate this item's position and angle range
             let siblings: Vec<_> = menu_items_clone
                 .iter()
                 .filter(|i| i.parent_id == item_data.parent_id)
                 .collect();
             
-            let total = siblings.len() as f32;
-            let index = siblings.iter().position(|i| i.id == item_data.id).unwrap_or(0) as f32;
+            let total = siblings.len();
+            let index = siblings.iter().position(|i| i.id == item_data.id).unwrap_or(0);
             
-            let angle_per_item = 360.0 / total;
+            // Get fixed angle for this position
+            let center_angle = FIXED_ANGLES[index.min(7)];
+            let angle_span = if total <= 4 { 90.0 } else { 45.0 };
             let gap = 2.0;  // Match config.item-gap-angle
             
-            let start = -90.0 + index * angle_per_item + gap / 2.0;
-            let sweep = angle_per_item - gap;
+            let start = center_angle - angle_span / 2.0 + gap / 2.0;
+            let sweep = angle_span - gap;
             let end = start + sweep;
             
             // Normalize start/end to 0-360
