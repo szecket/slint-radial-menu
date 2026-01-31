@@ -294,13 +294,18 @@ export component RadialMenu inherits Rectangle {
         // Use precomputed position from struct
         property <int> position-in-parent: item.sibling-index;
         property <int> total-siblings: item.sibling-count;
-        property <angle> angle-per-item: total-siblings > 0 ? 360deg / total-siblings : 360deg;
         property <angle> gap: config.item-gap-angle;
         
-        // Start from top (270deg in standard coords, -90 in our system)
-        // and distribute clockwise
-        start-angle: -90deg + position-in-parent * angle-per-item + gap / 2;
-        sweep-angle: angle-per-item - gap;
+        // Fixed angular positions (cardinal-first)
+        // Note: y-axis is inverted in rendering, so angles are clockwise from East
+        // Position 0: East (0°), Position 1: South (-90° = 270°), 
+        // Position 2: West (180°), Position 3: North (90°)
+        // Position 4: Northeast (-45° = 315°), Position 5: Southeast (-135° = 225°),
+        // Position 6: Southwest (135°), Position 7: Northwest (45°)
+        property <angle> fixed-angles: [0deg, -90deg, 180deg, 90deg, -45deg, -135deg, 135deg, 45deg][position-in-parent];
+        property <angle> angle-span: total-siblings <= 4 ? 90deg : 45deg;
+        start-angle: fixed-angles - angle-span / 2 + gap / 2;
+        sweep-angle: angle-span - gap;
         inner-radius: root.config.inner-radius;
         outer-radius: root.config.outer-radius * root.open-progress * root.submenu-progress;
         
