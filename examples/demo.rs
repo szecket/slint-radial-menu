@@ -56,7 +56,7 @@ slint::slint! {
         Text {
             x: 20px;
             y: 20px;
-            text: "Control+Click anywhere to open the radial menu";
+            text: "Right-click anywhere to open the radial menu";
             color: #ffffff;
             font-size: 14px;
         }
@@ -87,7 +87,7 @@ slint::slint! {
             font-size: 14px;
         }
         
-        // Full-window touch area for Control+click activation and mouse tracking
+        // Full-window touch area for right-click activation and mouse tracking
         Rectangle {
             // Transparent background makes Rectangle hittable for pointer events
             background: transparent;
@@ -98,11 +98,11 @@ slint::slint! {
                 
                 pointer-event(event) => {
                     if event.kind == PointerEventKind.down {
-                        if event.modifiers.control {
-                            debug("Command+click detected, opening menu at", self.mouse-x, self.mouse-y);
+                        if event.button == PointerEventButton.right {
+                            debug("Right-click detected, opening menu at", self.mouse-x, self.mouse-y);
                             menu.open(self.mouse-x, self.mouse-y);
                         } else {
-                            debug("Click without modifier");
+                            debug("Click without right button");
                         }
                     } else if event.kind == PointerEventKind.up {
                         if menu.is-open() && !menu.is-in-hover-mode() {
@@ -129,6 +129,8 @@ slint::slint! {
         menu := RadialMenu {
             items: root.menu-items;
             current-parent-id <=> root.menu-current-parent;
+            window-width: root.width;
+            window-height: root.height;
             
             item-selected(id) => {
                 root.item-selected-callback(id);

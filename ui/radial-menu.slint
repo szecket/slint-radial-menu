@@ -10,6 +10,8 @@ export component RadialMenu inherits Rectangle {
     // Public API
     in property <[MenuItem]> items: [];
     in property <RadialMenuConfig> config: RadialMenuDefaults.config;
+    in property <length> window-width: 800px;  // Window bounds for edge detection
+    in property <length> window-height: 600px;
     
     // State
     in-out property <bool> menu-visible: false;
@@ -104,6 +106,7 @@ export component RadialMenu inherits Rectangle {
             
             // Check hover timer (only in drag mode, not hover mode)
             if !root.hover-mode && root.is-pressed && root.highlighted-item-id != -1 && !root.submenu-triggered {
+                debug("Checking hover timer - hover-mode:", root.hover-mode, "is-pressed:", root.is-pressed);
                 root.check-hover-timer();
             }
             
@@ -152,6 +155,11 @@ export component RadialMenu inherits Rectangle {
             submenu-progress = 0.0;
             submenu-progress = 1.0;
             last-parent-id = current-parent-id;
+            
+            // In hover mode, constrain menu position to keep submenu visible
+            if hover-mode {
+                root.constrain-menu-position();
+            }
         }
         // Update parent item text for center display
         // Show the parent of the current level (grandparent)
@@ -382,6 +390,24 @@ export component RadialMenu inherits Rectangle {
     public pure function is-in-hover-mode() -> bool {
         hover-mode
     }
+    
+    // Constrain menu position to keep it fully visible within window bounds
+    function constrain-menu-position() {
+        // Menu size includes padding
+        // Constrain X
+        if menu-x < (config.outer-radius + 20px) {
+            menu-x = config.outer-radius + 20px;
+        } else if menu-x > window-width - (config.outer-radius + 20px) {
+            menu-x = window-width - (config.outer-radius + 20px);
+        }
+        
+        // Constrain Y
+        if menu-y < (config.outer-radius + 20px) {
+            menu-y = config.outer-radius + 20px;
+        } else if menu-y > window-height - (config.outer-radius + 20px) {
+            menu-y = window-height - (config.outer-radius + 20px);
+        }
+    }
     public function open(x: length, y: length) {
         debug("RadialMenu.open called at", x, y);
         menu-x = x;
@@ -473,6 +499,8 @@ export component RadialMenu inherits Rectangle {
         if !root.has-dragged {
             debug("No drag detected - switching to hover mode");
             root.hover-mode = true;
+            // Adjust menu position to keep it fully visible
+            root.constrain-menu-position();
             return;
         }
         
@@ -609,8 +637,10 @@ export component RadialMenu inherits Rectangle {
             // Timer is already running from is-pressed, no need to restart
         }
         
-        // Check hover timer (also called by continuous timer)
-        root.check-hover-timer();
+        // Check hover timer (only in drag mode, not hover mode)
+        if !root.hover-mode {
+            root.check-hover-timer();
+        }
     }
     
     // Separate function for hover timer checking  
