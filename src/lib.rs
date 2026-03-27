@@ -140,10 +140,23 @@ pub fn to_slint_model(items: &[MenuItemData]) -> slint::ModelRc<MenuItem> {
                 .collect();
             
             let sibling_count = siblings.len() as i32;
-            let sibling_index = siblings
+            
+            // Find position of this item among siblings
+            let original_index = siblings
                 .iter()
                 .position(|i| i.id == item.id)
-                .unwrap_or(0) as i32;
+                .unwrap_or(0);
+            
+            // Map to fixed angular positions (cardinal-first):
+            // Position 0: East (0°)
+            // Position 1: South (90°)
+            // Position 2: West (180°)
+            // Position 3: North (270°)
+            // Position 4: Northeast (45°)
+            // Position 5: Southeast (135°)
+            // Position 6: Southwest (225°)
+            // Position 7: Northwest (315°)
+            let sibling_index = original_index.min(7) as i32;
             
             MenuItem {
                 id: item.id,
