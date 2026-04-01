@@ -37,8 +37,9 @@ export component RadialMenu inherits Rectangle {
     property <bool> is-pressed: false;
     property <bool> hover-mode: false;  // True if menu is in hover-and-click mode (vs drag mode)
     property <bool> has-dragged: false;  // Track if user has dragged significantly
-    property <length> initial-click-x: 0px;  // Original click position for drag detection
+    property <length> initial-click-x: 0px;  // Position for drag detection (set from first mouse update)
     property <length> initial-click-y: 0px;
+    property <bool> initial-position-set: false;  // Whether initial position has been captured
     property <length> actual-drag-distance: 0px;  // Distance from initial click (not menu center)
     property <duration> hover-start-time: 0ms;
     property <duration> current-time: 0ms;
@@ -429,9 +430,11 @@ export component RadialMenu inherits Rectangle {
         parent-menu-hidden = false;
         drag-delta-x = 0px;
         drag-delta-y = 0px;
-        // Track initial click position for drag detection (before constraining)
-        initial-click-x = x;
-        initial-click-y = y;
+        // Initial position for drag detection will be set from first update-mouse call
+        // This handles cases where menu position differs from actual mouse position
+        initial-position-set = false;
+        initial-click-x = 0px;
+        initial-click-y = 0px;
         actual-drag-distance = 0px;
         // Use constrained position as starting point
         external-mouse-x = menu-x;
@@ -483,6 +486,16 @@ export component RadialMenu inherits Rectangle {
             return;
         }
         debug("update-mouse called, hover-mode:", hover-mode, "is-pressed:", is-pressed);
+        
+        // Capture initial position from first mouse update
+        // This handles cases where menu opens at a different position than the mouse
+        if !initial-position-set {
+            initial-click-x = abs-x;
+            initial-click-y = abs-y;
+            initial-position-set = true;
+            debug("Initial position set to:", abs-x, abs-y);
+        }
+        
         external-mouse-x = abs-x;
         external-mouse-y = abs-y;
         
