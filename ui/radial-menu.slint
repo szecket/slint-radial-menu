@@ -37,6 +37,9 @@ export component RadialMenu inherits Rectangle {
     property <bool> is-pressed: false;
     property <bool> hover-mode: false;  // True if menu is in hover-and-click mode (vs drag mode)
     property <bool> has-dragged: false;  // Track if user has dragged significantly
+    property <length> initial-click-x: 0px;  // Original click position for drag detection
+    property <length> initial-click-y: 0px;
+    property <length> actual-drag-distance: 0px;  // Distance from initial click (not menu center)
     property <duration> hover-start-time: 0ms;
     property <duration> current-time: 0ms;
     property <bool> submenu-triggered: false;  // Flag to prevent multiple triggers
@@ -371,12 +374,9 @@ export component RadialMenu inherits Rectangle {
             }
         }
         moved => {
-            if root.is-pressed {
-                // Track if user has dragged significantly (more than 5px)
-                if root.drag-distance > 5px {
-                    root.has-dragged = true;
-                }
-            } else if root.hover-mode {
+            // Note: Drag tracking (has-dragged) is handled by update-mouse() called from parent
+            // This handler just updates highlighting for hover mode
+            if root.hover-mode {
                 // In hover mode, update position for highlighting
                 root.drag-delta-x = self.mouse-x - parent.width / 2;
                 root.drag-delta-y = self.mouse-y - parent.height / 2;
@@ -429,8 +429,13 @@ export component RadialMenu inherits Rectangle {
         parent-menu-hidden = false;
         drag-delta-x = 0px;
         drag-delta-y = 0px;
-        external-mouse-x = x;
-        external-mouse-y = y;
+        // Track initial click position for drag detection (before constraining)
+        initial-click-x = x;
+        initial-click-y = y;
+        actual-drag-distance = 0px;
+        // Use constrained position as starting point
+        external-mouse-x = menu-x;
+        external-mouse-y = menu-y;
         
         // Clear any existing ghost text
         ghost-active = false;
@@ -481,12 +486,15 @@ export component RadialMenu inherits Rectangle {
         external-mouse-x = abs-x;
         external-mouse-y = abs-y;
         
-        // Calculate drag vector from menu center to current mouse position
+        // Calculate drag vector from menu center to current mouse position (for highlighting)
         drag-delta-x = abs-x - menu-x;
         drag-delta-y = abs-y - menu-y;
         
-        // Track if user has dragged significantly (more than 5px)
-        if is-pressed && drag-distance > 5px {
+        // Calculate actual drag distance from initial click position (for drag detection)
+        actual-drag-distance = sqrt(((abs-x - initial-click-x) / 1px) * ((abs-x - initial-click-x) / 1px) + ((abs-y - initial-click-y) / 1px) * ((abs-y - initial-click-y) / 1px)) * 1px;
+        
+        // Track if user has dragged significantly (more than 5px from initial click)
+        if is-pressed && actual-drag-distance > 5px {
             has-dragged = true;
         }
         debug("drag-distance:", drag-distance, "inner-radius:", config.inner-radius);
@@ -624,6 +632,9 @@ export component RadialMenu inherits Rectangle {
                 root.menu-x = root.external-mouse-x;
                 root.menu-y = root.external-mouse-y;
                 
+                // Constrain position to keep submenu visible
+                root.constrain-menu-position();
+                
                 // Reset drag tracking for new menu
                 root.drag-delta-x = 0px;
                 root.drag-delta-y = 0px;
@@ -678,6 +689,9 @@ export component RadialMenu inherits Rectangle {
                 // Calculate new menu center at captured position
                 root.menu-x = root.submenu-capture-x;
                 root.menu-y = root.submenu-capture-y;
+                
+                // Constrain position to keep submenu visible
+                root.constrain-menu-position();
                 
                 // Reset drag tracking for new menu
                 root.drag-delta-x = 0px;
