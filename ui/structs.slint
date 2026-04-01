@@ -30,6 +30,9 @@ export struct RadialMenuConfig {
     text-hover-color: color,
     border-color: color,
     
+    // Opacity
+    wedge-opacity: float,  // Opacity of menu wedges (0.0 - 1.0)
+    
     // Animation
     open-duration-ms: int,
     submenu-delay-ms: int,  // Delay before showing submenu
@@ -48,6 +51,7 @@ export global RadialMenuDefaults {
         text-color: #cccccc,
         text-hover-color: #ffffff,
         border-color: #404040,
+        wedge-opacity: 1.0,
         open-duration-ms: 150,
         submenu-delay-ms: 1000,
     };

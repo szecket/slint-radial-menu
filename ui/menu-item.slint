@@ -39,6 +39,7 @@ export component RadialMenuItem inherits Rectangle {
         fill: root.enabled ? root.current-bg : #1a1a1a80;
         stroke: config.border-color;
         stroke-width: 1px;
+        opacity: config.wedge-opacity;
         
         // Draw arc segment
         // Use the same gap angle at both radii for proportional appearance
