@@ -18,37 +18,41 @@ export struct MenuItem {
 export struct RadialMenuConfig {
     // Geometry
     inner-radius: length,
-    outer-radius: length,
-    item-gap-angle: angle,  // Gap between items in degrees
+        outer-radius: length,
+        item-gap-angle: angle,  // Gap between items in degrees
     
     // Colors (minimal professional palette)
     background-color: color,
-    item-color: color,
-    item-hover-color: color,
-    item-active-color: color,
-    text-color: color,
-    text-hover-color: color,
-    border-color: color,
+        item-color: color,
+        item-hover-color: color,
+        item-active-color: color,
+        text-color: color,
+        text-hover-color: color,
+        border-color: color,
+    
+    // Opacity
+    wedge-opacity: float,  // Opacity of menu wedges (0.0 - 1.0)
     
     // Animation
     open-duration-ms: int,
-    submenu-delay-ms: int,  // Delay before showing submenu
+        submenu-delay-ms: int,  // Delay before showing submenu
 }
 
 /// Default configuration for a minimal professional look.
 export global RadialMenuDefaults {
-    out property <RadialMenuConfig> config: {
-        inner-radius: 40px,
-        outer-radius: 120px,
-        item-gap-angle: 2deg,
-        background-color: #1a1a1a,
-        item-color: #2d2d2d,
-        item-hover-color: #3d3d3d,
-        item-active-color: #4a9eff,
-        text-color: #cccccc,
-        text-hover-color: #ffffff,
-        border-color: #404040,
-        open-duration-ms: 150,
-        submenu-delay-ms: 1000,
-    };
-}
+            out property <RadialMenuConfig> config: {
+                inner-radius: 40px,
+                outer-radius: 120px,
+                item-gap-angle: 2deg,
+                background-color: #1a1a1a,
+                item-color: #2d2d2d,
+                item-hover-color: #3d3d3d,
+                item-active-color: #4a9eff,
+                text-color: #cccccc,
+                text-hover-color: #ffffff,
+                border-color: #404040,
+                wedge-opacity: 1.0,
+                open-duration-ms: 150,
+                submenu-delay-ms: 1000,
+            };
+        }

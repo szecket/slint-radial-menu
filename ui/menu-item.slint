@@ -17,17 +17,17 @@ export component RadialMenuItem inherits Rectangle {
     in-out property <bool> pressed: false;
     callback clicked();
     callback hover-changed(bool);
-    
+
     // Calculate center position for this arc segment
     property <angle> mid-angle: start-angle + sweep-angle / 2;
     property <length> label-radius: (inner-radius + outer-radius) / 2;
     property <length> label-x: label-radius * cos(mid-angle);
     property <length> label-y: label-radius * sin(mid-angle);
-    
+
     // Colors based on state
     property <color> current-bg: pressed ? config.item-active-color : hovered ? config.item-hover-color : config.item-color;
     property <color> current-text: hovered ? config.text-hover-color : config.text-color;
-    
+
     // Arc segment using Path
     Path {
         width: 100%;
@@ -36,10 +36,10 @@ export component RadialMenuItem inherits Rectangle {
         viewbox-y: -parent.height / 2px;
         viewbox-width: parent.width / 1px;
         viewbox-height: parent.height / 1px;
-        fill: root.enabled ? root.current-bg : #1a1a1a80;
-        stroke: config.border-color;
+        fill: (root.enabled ? root.current-bg : #1a1a1a80).with-alpha(config.wedge-opacity);
+        stroke: config.border-color.with-alpha(config.wedge-opacity);
         stroke-width: 1px;
-        
+
         // Draw arc segment
         // Use the same gap angle at both radii for proportional appearance
         property <angle> inner-gap-offset: config.item-gap-angle;
@@ -77,7 +77,7 @@ export component RadialMenuItem inherits Rectangle {
 
         Close { }
     }
-    
+
     // Label text
     Text {
         x: parent.width / 2 + root.label-x - self.width / 2;

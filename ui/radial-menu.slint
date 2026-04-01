@@ -12,7 +12,7 @@ export component RadialMenu inherits Rectangle {
     in property <RadialMenuConfig> config: RadialMenuDefaults.config;
     in property <length> window-width: 800px;  // Window bounds for edge detection
     in property <length> window-height: 600px;
-    
+
     // State
     in-out property <bool> menu-visible: false;
     in-out property <length> menu-x: 0px;
@@ -23,7 +23,7 @@ export component RadialMenu inherits Rectangle {
     // External mouse position (set by parent component)
     in-out property <length> external-mouse-x: 0px;
     in-out property <length> external-mouse-y: 0px;
-    
+
     // Track mouse for direction detection
     property <length> mouse-x-relative: 0px;  // Relative to menu center
     property <length> mouse-y-relative: 0px;
@@ -37,6 +37,9 @@ export component RadialMenu inherits Rectangle {
     property <bool> is-pressed: false;
     property <bool> hover-mode: false;  // True if menu is in hover-and-click mode (vs drag mode)
     property <bool> has-dragged: false;  // Track if user has dragged significantly
+    property <length> initial-click-x: 0px;  // Original click position for drag detection
+    property <length> initial-click-y: 0px;
+    property <length> actual-drag-distance: 0px;  // Distance from initial click (not menu center)
     property <duration> hover-start-time: 0ms;
     property <duration> current-time: 0ms;
     property <bool> submenu-triggered: false;  // Flag to prevent multiple triggers
@@ -48,7 +51,7 @@ export component RadialMenu inherits Rectangle {
     property <length> submenu-capture-y: 0px;
     property <duration> submenu-capture-time: 0ms;  // When we captured the position
     property <bool> submenu-position-captured: false;
-    
+
     // Ghost text for selection confirmation (public so Demo can display it)
     out property <string> ghost-text: "";
     out property <float> ghost-opacity: 0.0;
@@ -60,7 +63,7 @@ export component RadialMenu inherits Rectangle {
         duration: 250ms;
         easing: ease-out;
     }
-    
+
     // Trigger ghost fade when activated
     changed ghost-active => {
         if ghost-active {
@@ -134,11 +137,11 @@ export component RadialMenu inherits Rectangle {
     property <bool> is-opening: false;
     property <float> open-progress: 0.0;
     property <int> animation-tick-trigger: 0;
-    
+
     // Submenu transition animation
     property <float> submenu-progress: 1.0;
     property <int> last-parent-id: -1;
-    
+
     // Trigger main menu animation on property change
     changed animation-tick-trigger => {
         if animation-tick-trigger > 0 {
@@ -183,17 +186,17 @@ export component RadialMenu inherits Rectangle {
         duration: 200ms;
         easing: ease-in-out;
     }
-    
+
     // Continuous timer tick for hover detection
     // This keeps updating even when mouse is still, so timer can trigger
     property <int> timer-tick: 0;
-    
+
     // Timer animation that runs continuously when pressed
     animate timer-tick {
         duration: 50ms;  // Check every 50ms
         easing: linear;
     }
-    
+
     // Monitor press state to start/stop timer
     changed is-pressed => {
         if root.is-pressed {
@@ -221,7 +224,7 @@ export component RadialMenu inherits Rectangle {
         // This will be calculated properly in the for loop
         items.length  // Actual count happens during rendering
     }
-    
+
     // Helper: calculate angle from center to mouse
     pure function calculate-mouse-angle() -> angle {
         // Calculate angle using atan2 approximation
@@ -230,18 +233,18 @@ export component RadialMenu inherits Rectangle {
         // We convert to start from top (-90deg offset)
         atan(mouse-y-relative / max(abs(mouse-x-relative), 1px))
     }
-    
+
     // Size based on outer radius - but 0 when not visible to avoid intercepting events
     width: menu-visible ? config.outer-radius * 2 + 40px : 0px;
     height: menu-visible ? config.outer-radius * 2 + 40px : 0px;
-    
+
     // Position at menu location (off-screen when not visible)
     x: menu-visible ? menu-x - (config.outer-radius + 20px) : -1000px;
     y: menu-visible ? menu-y - (config.outer-radius + 20px) : -1000px;
-    
+
     // Only show when visible
     opacity: open-progress;
-    
+
     // Background circle (subtle shadow/glow)
     if menu-visible: Rectangle {
         x: (parent.width - self.width) / 2;
@@ -249,8 +252,7 @@ export component RadialMenu inherits Rectangle {
         width: config.outer-radius * 2 + 8px;
         height: config.outer-radius * 2 + 8px;
         border-radius: self.width / 2;
-        background: #00000040;
-        opacity: 0.2;
+        background: #000000.with-alpha(config.wedge-opacity * 0.25);
         // Inner background
         Rectangle {
             x: 4px;
@@ -258,12 +260,12 @@ export component RadialMenu inherits Rectangle {
             width: parent.width - 8px;
             height: parent.height - 8px;
             border-radius: self.width / 2;
-            background: config.background-color;
-            border-color: config.border-color;
+            background: config.background-color.with-alpha(config.wedge-opacity);
+            border-color: config.border-color.with-alpha(config.wedge-opacity);
             border-width: 1px;
         }
     }
-    
+
     // Center dot
     if menu-visible: Rectangle {
         x: (parent.width - self.width) / 2;
@@ -271,10 +273,10 @@ export component RadialMenu inherits Rectangle {
         width: config.inner-radius * 2 - 8px;
         height: config.inner-radius * 2 - 8px;
         border-radius: self.width / 2;
-        background: config.background-color;
-        border-color: config.border-color;
+        background: config.background-color.with-alpha(config.wedge-opacity);
+        border-color: config.border-color.with-alpha(config.wedge-opacity);
         border-width: 1px;
-        
+
         // Show parent item name when in submenu
         if root.current-parent-id != -1: Text {
             width: 100%;
@@ -287,7 +289,7 @@ export component RadialMenu inherits Rectangle {
             overflow: elide;
         }
     }
-    
+
     // Menu items rendered as arc segments
     for item[index] in items: RadialMenuItem {
         // Only show items matching current parent
@@ -300,12 +302,12 @@ export component RadialMenu inherits Rectangle {
         enabled: item.enabled;
         has-children: item.has-children;
         config: root.config;
-        
+
         // Use precomputed position from struct
         property <int> position-in-parent: item.sibling-index;
         property <int> total-siblings: item.sibling-count;
         property <angle> gap: config.item-gap-angle;
-        
+
         // Fixed angular positions (cardinal-first)
         // Note: y-axis is inverted in rendering, so angles are clockwise from East
         // Position 0: East (0°), Position 1: South (-90° = 270°), 
@@ -318,14 +320,14 @@ export component RadialMenu inherits Rectangle {
         sweep-angle: angle-span - gap;
         inner-radius: root.config.inner-radius;
         outer-radius: root.config.outer-radius * root.open-progress * root.submenu-progress;
-        
+
         // Highlight if mouse angle points to this item
         hovered: root.highlighted-item-id == item.id;
         clicked => {
             // No-op: we handle selection on release, not click
         }
     }
-    
+
     // Touch/click handling: Press-hold-drag-release
     // Only enabled when menu is visible to avoid intercepting clicks
     if menu-visible: TouchArea {
@@ -369,12 +371,9 @@ export component RadialMenu inherits Rectangle {
             }
         }
         moved => {
-            if root.is-pressed {
-                // Track if user has dragged significantly (more than 5px)
-                if root.drag-distance > 5px {
-                    root.has-dragged = true;
-                }
-            } else if root.hover-mode {
+            // Note: Drag tracking (has-dragged) is handled by update-mouse() called from parent
+            // This handler just updates highlighting for hover mode
+            if root.hover-mode {
                 // In hover mode, update position for highlighting
                 root.drag-delta-x = self.mouse-x - parent.width / 2;
                 root.drag-delta-y = self.mouse-y - parent.height / 2;
@@ -382,7 +381,7 @@ export component RadialMenu inherits Rectangle {
             }
         }
     }
-    
+
     // Public functions
     public pure function is-open() -> bool {
         menu-visible
@@ -390,7 +389,7 @@ export component RadialMenu inherits Rectangle {
     public pure function is-in-hover-mode() -> bool {
         hover-mode
     }
-    
+
     // Constrain menu position to keep it fully visible within window bounds
     function constrain-menu-position() {
         // Menu size includes padding
@@ -412,6 +411,10 @@ export component RadialMenu inherits Rectangle {
         debug("RadialMenu.open called at", x, y);
         menu-x = x;
         menu-y = y;
+        
+        // Constrain position to keep menu fully visible
+        constrain-menu-position();
+
         current-parent-id = -1;
         menu-visible = true;
         is-pressed = true;
@@ -423,8 +426,13 @@ export component RadialMenu inherits Rectangle {
         parent-menu-hidden = false;
         drag-delta-x = 0px;
         drag-delta-y = 0px;
-        external-mouse-x = x;
-        external-mouse-y = y;
+        // Track initial click position for drag detection (before constraining)
+        initial-click-x = x;
+        initial-click-y = y;
+        actual-drag-distance = 0px;
+        // Use constrained position as starting point
+        external-mouse-x = menu-x;
+        external-mouse-y = menu-y;
         
         // Clear any existing ghost text
         ghost-active = false;
@@ -460,7 +468,7 @@ export component RadialMenu inherits Rectangle {
         drag-delta-y = 0px;
         menu-closed();
     }
-    
+
     // Called by parent to update mouse position during drag or hover
     public function update-mouse(abs-x: length, abs-y: length) {
         if !menu-visible {
@@ -475,12 +483,15 @@ export component RadialMenu inherits Rectangle {
         external-mouse-x = abs-x;
         external-mouse-y = abs-y;
         
-        // Calculate drag vector from menu center to current mouse position
+        // Calculate drag vector from menu center to current mouse position (for highlighting)
         drag-delta-x = abs-x - menu-x;
         drag-delta-y = abs-y - menu-y;
         
-        // Track if user has dragged significantly (more than 5px)
-        if is-pressed && drag-distance > 5px {
+        // Calculate actual drag distance from initial click position (for drag detection)
+        actual-drag-distance = sqrt(((abs-x - initial-click-x) / 1px) * ((abs-x - initial-click-x) / 1px) + ((abs-y - initial-click-y) / 1px) * ((abs-y - initial-click-y) / 1px)) * 1px;
+        
+        // Track if user has dragged significantly (more than 5px from initial click)
+        if is-pressed && actual-drag-distance > 5px {
             has-dragged = true;
         }
         debug("drag-distance:", drag-distance, "inner-radius:", config.inner-radius);
@@ -489,7 +500,7 @@ export component RadialMenu inherits Rectangle {
         update-highlighted-item();
         debug("highlighted-item-id:", highlighted-item-id);
     }
-    
+
     // Called by parent when mouse is released
     public function release() {
         debug("release() called - has-dragged:", has-dragged, "highlighted-item-id:", highlighted-item-id, "drag-distance:", drag-distance);
@@ -618,6 +629,9 @@ export component RadialMenu inherits Rectangle {
                 root.menu-x = root.external-mouse-x;
                 root.menu-y = root.external-mouse-y;
                 
+                // Constrain position to keep submenu visible
+                root.constrain-menu-position();
+                
                 // Reset drag tracking for new menu
                 root.drag-delta-x = 0px;
                 root.drag-delta-y = 0px;
@@ -642,7 +656,7 @@ export component RadialMenu inherits Rectangle {
             root.check-hover-timer();
         }
     }
-    
+
     // Separate function for hover timer checking  
     function check-hover-timer() {
         if root.highlighted-item-id == -1 || root.submenu-triggered {
@@ -672,6 +686,9 @@ export component RadialMenu inherits Rectangle {
                 // Calculate new menu center at captured position
                 root.menu-x = root.submenu-capture-x;
                 root.menu-y = root.submenu-capture-y;
+                
+                // Constrain position to keep submenu visible
+                root.constrain-menu-position();
                 
                 // Reset drag tracking for new menu
                 root.drag-delta-x = 0px;
