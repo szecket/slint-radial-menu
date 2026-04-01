@@ -12,7 +12,7 @@ export component RadialMenu inherits Rectangle {
     in property <RadialMenuConfig> config: RadialMenuDefaults.config;
     in property <length> window-width: 800px;  // Window bounds for edge detection
     in property <length> window-height: 600px;
-    
+
     // State
     in-out property <bool> menu-visible: false;
     in-out property <length> menu-x: 0px;
@@ -23,7 +23,7 @@ export component RadialMenu inherits Rectangle {
     // External mouse position (set by parent component)
     in-out property <length> external-mouse-x: 0px;
     in-out property <length> external-mouse-y: 0px;
-    
+
     // Track mouse for direction detection
     property <length> mouse-x-relative: 0px;  // Relative to menu center
     property <length> mouse-y-relative: 0px;
@@ -48,7 +48,7 @@ export component RadialMenu inherits Rectangle {
     property <length> submenu-capture-y: 0px;
     property <duration> submenu-capture-time: 0ms;  // When we captured the position
     property <bool> submenu-position-captured: false;
-    
+
     // Ghost text for selection confirmation (public so Demo can display it)
     out property <string> ghost-text: "";
     out property <float> ghost-opacity: 0.0;
@@ -60,7 +60,7 @@ export component RadialMenu inherits Rectangle {
         duration: 250ms;
         easing: ease-out;
     }
-    
+
     // Trigger ghost fade when activated
     changed ghost-active => {
         if ghost-active {
@@ -134,11 +134,11 @@ export component RadialMenu inherits Rectangle {
     property <bool> is-opening: false;
     property <float> open-progress: 0.0;
     property <int> animation-tick-trigger: 0;
-    
+
     // Submenu transition animation
     property <float> submenu-progress: 1.0;
     property <int> last-parent-id: -1;
-    
+
     // Trigger main menu animation on property change
     changed animation-tick-trigger => {
         if animation-tick-trigger > 0 {
@@ -183,17 +183,17 @@ export component RadialMenu inherits Rectangle {
         duration: 200ms;
         easing: ease-in-out;
     }
-    
+
     // Continuous timer tick for hover detection
     // This keeps updating even when mouse is still, so timer can trigger
     property <int> timer-tick: 0;
-    
+
     // Timer animation that runs continuously when pressed
     animate timer-tick {
         duration: 50ms;  // Check every 50ms
         easing: linear;
     }
-    
+
     // Monitor press state to start/stop timer
     changed is-pressed => {
         if root.is-pressed {
@@ -221,7 +221,7 @@ export component RadialMenu inherits Rectangle {
         // This will be calculated properly in the for loop
         items.length  // Actual count happens during rendering
     }
-    
+
     // Helper: calculate angle from center to mouse
     pure function calculate-mouse-angle() -> angle {
         // Calculate angle using atan2 approximation
@@ -230,18 +230,18 @@ export component RadialMenu inherits Rectangle {
         // We convert to start from top (-90deg offset)
         atan(mouse-y-relative / max(abs(mouse-x-relative), 1px))
     }
-    
+
     // Size based on outer radius - but 0 when not visible to avoid intercepting events
     width: menu-visible ? config.outer-radius * 2 + 40px : 0px;
     height: menu-visible ? config.outer-radius * 2 + 40px : 0px;
-    
+
     // Position at menu location (off-screen when not visible)
     x: menu-visible ? menu-x - (config.outer-radius + 20px) : -1000px;
     y: menu-visible ? menu-y - (config.outer-radius + 20px) : -1000px;
-    
+
     // Only show when visible
     opacity: open-progress;
-    
+
     // Background circle (subtle shadow/glow)
     if menu-visible: Rectangle {
         x: (parent.width - self.width) / 2;
@@ -250,7 +250,7 @@ export component RadialMenu inherits Rectangle {
         height: config.outer-radius * 2 + 8px;
         border-radius: self.width / 2;
         background: #00000040;
-        opacity: 0.2;
+        opacity: config.wedge-opacity * 0.2;
         // Inner background
         Rectangle {
             x: 4px;
@@ -261,9 +261,10 @@ export component RadialMenu inherits Rectangle {
             background: config.background-color;
             border-color: config.border-color;
             border-width: 1px;
+            opacity: config.wedge-opacity;
         }
     }
-    
+
     // Center dot
     if menu-visible: Rectangle {
         x: (parent.width - self.width) / 2;
@@ -274,7 +275,8 @@ export component RadialMenu inherits Rectangle {
         background: config.background-color;
         border-color: config.border-color;
         border-width: 1px;
-        
+        opacity: config.wedge-opacity;
+
         // Show parent item name when in submenu
         if root.current-parent-id != -1: Text {
             width: 100%;
@@ -287,7 +289,7 @@ export component RadialMenu inherits Rectangle {
             overflow: elide;
         }
     }
-    
+
     // Menu items rendered as arc segments
     for item[index] in items: RadialMenuItem {
         // Only show items matching current parent
@@ -300,12 +302,12 @@ export component RadialMenu inherits Rectangle {
         enabled: item.enabled;
         has-children: item.has-children;
         config: root.config;
-        
+
         // Use precomputed position from struct
         property <int> position-in-parent: item.sibling-index;
         property <int> total-siblings: item.sibling-count;
         property <angle> gap: config.item-gap-angle;
-        
+
         // Fixed angular positions (cardinal-first)
         // Note: y-axis is inverted in rendering, so angles are clockwise from East
         // Position 0: East (0°), Position 1: South (-90° = 270°), 
@@ -318,14 +320,14 @@ export component RadialMenu inherits Rectangle {
         sweep-angle: angle-span - gap;
         inner-radius: root.config.inner-radius;
         outer-radius: root.config.outer-radius * root.open-progress * root.submenu-progress;
-        
+
         // Highlight if mouse angle points to this item
         hovered: root.highlighted-item-id == item.id;
         clicked => {
             // No-op: we handle selection on release, not click
         }
     }
-    
+
     // Touch/click handling: Press-hold-drag-release
     // Only enabled when menu is visible to avoid intercepting clicks
     if menu-visible: TouchArea {
@@ -382,7 +384,7 @@ export component RadialMenu inherits Rectangle {
             }
         }
     }
-    
+
     // Public functions
     public pure function is-open() -> bool {
         menu-visible
@@ -390,7 +392,7 @@ export component RadialMenu inherits Rectangle {
     public pure function is-in-hover-mode() -> bool {
         hover-mode
     }
-    
+
     // Constrain menu position to keep it fully visible within window bounds
     function constrain-menu-position() {
         // Menu size includes padding
@@ -412,6 +414,10 @@ export component RadialMenu inherits Rectangle {
         debug("RadialMenu.open called at", x, y);
         menu-x = x;
         menu-y = y;
+        
+        // Constrain position to keep menu fully visible
+        constrain-menu-position();
+
         current-parent-id = -1;
         menu-visible = true;
         is-pressed = true;
@@ -460,7 +466,7 @@ export component RadialMenu inherits Rectangle {
         drag-delta-y = 0px;
         menu-closed();
     }
-    
+
     // Called by parent to update mouse position during drag or hover
     public function update-mouse(abs-x: length, abs-y: length) {
         if !menu-visible {
@@ -489,7 +495,7 @@ export component RadialMenu inherits Rectangle {
         update-highlighted-item();
         debug("highlighted-item-id:", highlighted-item-id);
     }
-    
+
     // Called by parent when mouse is released
     public function release() {
         debug("release() called - has-dragged:", has-dragged, "highlighted-item-id:", highlighted-item-id, "drag-distance:", drag-distance);
@@ -642,7 +648,7 @@ export component RadialMenu inherits Rectangle {
             root.check-hover-timer();
         }
     }
-    
+
     // Separate function for hover timer checking  
     function check-hover-timer() {
         if root.highlighted-item-id == -1 || root.submenu-triggered {
