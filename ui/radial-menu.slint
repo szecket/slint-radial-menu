@@ -394,6 +394,35 @@ export component RadialMenu inherits Rectangle {
         hover-mode
     }
 
+    // Called by an external consumer's TouchArea when the user clicks while the menu
+    // is in hover mode.  This mirrors the internal TouchArea's pointer-event(down)
+    // handler and is needed when an external overlay intercepts pointer events before
+    // the internal TouchArea can see them.
+    public function handle-click() {
+        if !root.hover-mode {
+            return;
+        }
+        if root.highlighted-item-id != -1 {
+            if root.check-item-has-children(root.highlighted-item-id) {
+                root.show-submenu(root.highlighted-item-id, root.menu-x, root.menu-y);
+                root.highlighted-item-id = -1;
+            } else {
+                root.ghost-text = root.get-item-text(root.highlighted-item-id);
+                root.ghost-x = root.menu-x;
+                root.ghost-y = root.menu-y;
+                root.ghost-opacity = 1.0;
+                root.ghost-active = true;
+                root.ghost-start-time = animation-tick();
+                root.handle-item-action(root.highlighted-item-id);
+                root.close();
+            }
+        } else if root.drag-distance < config.inner-radius && root.current-parent-id != -1 {
+            root.go-back();
+        } else {
+            root.close();
+        }
+    }
+
     // Constrain menu position to keep it fully visible within window bounds
     function constrain-menu-position() {
         // Menu size includes padding
@@ -495,7 +524,6 @@ export component RadialMenu inherits Rectangle {
             initial-position-set = true;
             debug("Initial position set to:", abs-x, abs-y);
         }
-        
         external-mouse-x = abs-x;
         external-mouse-y = abs-y;
         
